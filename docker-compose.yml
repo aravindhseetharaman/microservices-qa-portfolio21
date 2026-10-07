@@ -3,6 +3,7 @@ services:
     image: pactfoundation/pact-broker:latest
     ports:
       - "9292:9292"
+
     environment:
       PACT_BROKER_DATABASE_ADAPTER: sqlite
       PACT_BROKER_DATABASE_NAME: /tmp/pact_broker.sqlite
@@ -11,7 +12,7 @@ services:
       PACT_BROKER_PORT: "9292"
       PACT_BROKER_LOG_LEVEL: WARN
 
-  # Pact Broker CLI (publish, can-i-deploy, record-deployment).
+  # --Pact Broker CLI (publish, can-i-deploy, record-deployment).
   # Only started on demand: `docker compose run --rm pact-cli <command>`
   pact-cli:
     image: pactfoundation/pact-cli:latest
