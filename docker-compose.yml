@@ -1,0 +1,26 @@
+services:
+  pact-broker:
+    image: pactfoundation/pact-broker:latest
+    ports:
+      - "9292:9292"
+    environment:
+      PACT_BROKER_DATABASE_ADAPTER: sqlite
+      PACT_BROKER_DATABASE_NAME: /tmp/pact_broker.sqlite
+      PACT_BROKER_BASIC_AUTH_USERNAME: pact
+      PACT_BROKER_BASIC_AUTH_PASSWORD: pact
+      PACT_BROKER_PORT: "9292"
+      PACT_BROKER_LOG_LEVEL: WARN
+
+  # Pact Broker CLI (publish, can-i-deploy, record-deployment).
+  # Only started on demand: `docker compose run --rm pact-cli <command>`
+  pact-cli:
+    image: pactfoundation/pact-cli:latest
+    profiles: ["cli"]
+    depends_on:
+      - pact-broker
+    environment:
+      PACT_BROKER_BASE_URL: http://pact-broker:9292
+      PACT_BROKER_USERNAME: pact
+      PACT_BROKER_PASSWORD: pact
+    volumes:
+      - ./checkout-service/target/pacts:/pacts

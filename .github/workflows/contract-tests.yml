@@ -1,0 +1,138 @@
+name: Contract Tests & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Every pact and verification result is tied to the exact commit that produced it
+  VERSION: ${{ github.sha }}
+  BRANCH: ${{ github.head_ref || github.ref_name }}
+  ENVIRONMENT: production
+  PACT_BROKER_BASE_URL: http://localhost:9292
+  PACT_BROKER_USERNAME: pact
+  PACT_BROKER_PASSWORD: pact
+  pact_do_not_track: "true"
+
+jobs:
+  contract-tests:
+    name: Consumer → Broker → Provider → can-i-deploy
+    runs-on: ubuntu-latest
+
+    # Throwaway Pact Broker for this run. For a broker whose state persists between
+    # runs (needed for real can-i-deploy history), point PACT_BROKER_* at PactFlow instead.
+    services:
+      pact-broker:
+        image: pactfoundation/pact-broker:latest
+        ports:
+          - 9292:9292
+        env:
+          PACT_BROKER_DATABASE_ADAPTER: sqlite
+          PACT_BROKER_DATABASE_NAME: /tmp/pact_broker.sqlite
+          PACT_BROKER_BASIC_AUTH_USERNAME: pact
+          PACT_BROKER_BASIC_AUTH_PASSWORD: pact
+          PACT_BROKER_PORT: "9292"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Wait for Pact Broker
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf -u pact:pact "$PACT_BROKER_BASE_URL/diagnostic/status/heartbeat" && exit 0
+            sleep 2
+          done
+          echo "Pact Broker did not start" && exit 1
+
+      # ---------- Consumer ----------
+      - name: "Consumer: run Pact tests"
+        working-directory: checkout-service
+        run: mvn -B test
+
+      - name: "Consumer: upload pact file"
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacts
+          path: checkout-service/target/pacts/
+
+      - name: "Consumer: publish pact to broker"
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            -v "$PWD/checkout-service/target/pacts:/pacts" \
+            pactfoundation/pact-cli:latest \
+            publish /pacts --consumer-app-version "$VERSION" --branch "$BRANCH"
+
+      # ---------- Provider ----------
+      - name: "Provider: verify pact and publish results"
+        working-directory: inventory-service
+        run: |
+          mvn -B verify \
+            -Dpact.provider.version="$VERSION" \
+            -Dpact.provider.branch="$BRANCH" \
+            -Dpact.verifier.publishResults=true
+
+      # ---------- Gate (every branch / PR) ----------
+      - name: "can-i-deploy: are these two versions compatible?"
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            pactfoundation/pact-cli:latest \
+            broker can-i-deploy \
+              --pacticipant CheckoutService --version "$VERSION" \
+              --pacticipant InventoryService --version "$VERSION"
+
+      # ---------- Deploy (main only): provider first, then consumer ----------
+      - name: "can-i-deploy InventoryService → production"
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            pactfoundation/pact-cli:latest \
+            broker can-i-deploy --pacticipant InventoryService --version "$VERSION" --to-environment "$ENVIRONMENT"
+
+      - name: "Deploy InventoryService"
+        if: github.ref == 'refs/heads/main'
+        run: echo "🚀 Deploying InventoryService $VERSION to $ENVIRONMENT (replace with your real deploy step)"
+
+      - name: "Record InventoryService deployment"
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            pactfoundation/pact-cli:latest \
+            broker record-deployment --pacticipant InventoryService --version "$VERSION" --environment "$ENVIRONMENT"
+
+      - name: "can-i-deploy CheckoutService → production"
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            pactfoundation/pact-cli:latest \
+            broker can-i-deploy --pacticipant CheckoutService --version "$VERSION" --to-environment "$ENVIRONMENT"
+
+      - name: "Deploy CheckoutService"
+        if: github.ref == 'refs/heads/main'
+        run: echo "🚀 Deploying CheckoutService $VERSION to $ENVIRONMENT (replace with your real deploy step)"
+
+      - name: "Record CheckoutService deployment"
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker run --rm --network host \
+            -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
+            pactfoundation/pact-cli:latest \
+            broker record-deployment --pacticipant CheckoutService --version "$VERSION" --environment "$ENVIRONMENT"
