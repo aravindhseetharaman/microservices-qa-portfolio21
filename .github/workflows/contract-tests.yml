@@ -136,3 +136,13 @@ jobs:
             -e PACT_BROKER_BASE_URL -e PACT_BROKER_USERNAME -e PACT_BROKER_PASSWORD \
             pactfoundation/pact-cli:latest \
             broker record-deployment --pacticipant CheckoutService --version "$VERSION" --environment "$ENVIRONMENT"
+
+      # The broker is thrown away after the run, so write its matrix to the run's Summary page.
+      # always() = show it even when an earlier step failed (that's when you need it most).
+      - name: "Show Pact matrix in run summary"
+        if: always()
+        run: |
+          curl -sf -u "$PACT_BROKER_USERNAME:$PACT_BROKER_PASSWORD" -H "Accept: application/hal+json" \
+            "$PACT_BROKER_BASE_URL/matrix?q%5B%5D%5Bpacticipant%5D=CheckoutService&q%5B%5D%5Bpacticipant%5D=InventoryService&latestby=cvpv" \
+            | python3 .github/scripts/matrix_summary.py >> "$GITHUB_STEP_SUMMARY" \
+            || echo "⚠️ Could not read the Pact matrix (did the broker start?)" >> "$GITHUB_STEP_SUMMARY"
