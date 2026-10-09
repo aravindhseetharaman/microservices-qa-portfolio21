@@ -67,5 +67,7 @@ class InventoryClientPactTest {
         Optional<Item> item = new InventoryClient(mockServer.getUrl()).getItem(99);
 
         assertThat(item).isEmpty();
+        //ok
+
     }
 }

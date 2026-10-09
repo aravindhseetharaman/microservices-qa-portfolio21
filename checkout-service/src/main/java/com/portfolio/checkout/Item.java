@@ -5,5 +5,6 @@ public record Item(long id, String name, int stock) {
 
     public boolean inStock() {
         return stock > 0;
+        //ok
     }
 }
