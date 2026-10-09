@@ -2,15 +2,32 @@
 # Full contract-testing flow against a local Pact Broker:
 #   consumer test -> publish pact -> provider verify -> can-i-deploy -> record deployment
 #
-# Usage: ./pact-flow.sh
+# Usage: ./pact-flow.sh                     (version = current git commit, branch = current git branch)
 #        CONSUMER_VERSION=1.1.0 PROVIDER_VERSION=1.1.0 ./pact-flow.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
-CONSUMER_VERSION=${CONSUMER_VERSION:-1.0.0}
-PROVIDER_VERSION=${PROVIDER_VERSION:-1.0.0}
-BRANCH=${BRANCH:-main}
+# Default version = short commit SHA, like CI. If there are uncommitted changes, the code
+# isn't the committed code, so add "-dirty-<timestamp>" to keep every run's version unique.
+git_version() {
+    local sha
+    sha=$(git rev-parse --short HEAD 2>/dev/null) || { echo "1.0.0"; return; }
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "${sha}-dirty-$(date +%Y%m%d%H%M%S)"
+    else
+        echo "$sha"
+    fi
+}
+GIT_VERSION=$(git_version)
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+
+CONSUMER_VERSION=${CONSUMER_VERSION:-$GIT_VERSION}
+PROVIDER_VERSION=${PROVIDER_VERSION:-$GIT_VERSION}
+BRANCH=${BRANCH:-$GIT_BRANCH}
 ENVIRONMENT=${ENVIRONMENT:-production}
+
+printf 'Consumer version: %s\nProvider version: %s\nBranch:           %s\n' \
+    "$CONSUMER_VERSION" "$PROVIDER_VERSION" "$BRANCH"
 
 cli() { docker compose run --rm pact-cli "$@"; }
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }

@@ -27,7 +27,7 @@ class InventoryClientPactTest {
                 .given("item 42 exists")
                 .uponReceiving("a request for item 42")
                     .path("/items/42")
-                    .method("GET")
+                        .method("GET")
                 .willRespondWith()
                     .status(200)
                     .matchHeader("Content-Type", "application/json(;.*)?", "application/json")
@@ -40,6 +40,7 @@ class InventoryClientPactTest {
 
     @Pact(consumer = "CheckoutService")
     V4Pact itemMissing(PactDslWithProvider builder) {
+
         return builder
                 .given("item 99 does not exist")
                 .uponReceiving("a request for item 99, which does not exist")
@@ -54,7 +55,6 @@ class InventoryClientPactTest {
     @PactTestFor(pactMethod = "itemExists")
     void returnsItemWhenItExists(MockServer mockServer) {
         Optional<Item> item = new InventoryClient(mockServer.getUrl()).getItem(42);
-
         assertThat(item).isPresent();
         assertThat(item.get().id()).isEqualTo(42);
         assertThat(item.get().name()).isEqualTo("Widget");

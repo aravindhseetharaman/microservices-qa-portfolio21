@@ -48,7 +48,11 @@ The body uses **type matchers**: the provider must return the right fields and t
 ./pact-flow.sh
 ```
 
-Run with different versions (in real CI, use the git commit SHA):
+By default, both services are versioned with the **current git commit** (e.g. `2c3f3b4`), the same as CI,
+and the branch is the current git branch. If you have uncommitted changes, the version becomes
+`<sha>-dirty-<timestamp>`, so a run of uncommitted code never reuses a commit's version.
+
+To set versions yourself:
 
 ```bash
 CONSUMER_VERSION=1.1.0 PROVIDER_VERSION=1.1.0 ./pact-flow.sh
@@ -118,7 +122,7 @@ because it needs a running broker.
 Rename `stock` to `quantity` in `inventory-service/.../Item.java`, then run:
 
 ```bash
-PROVIDER_VERSION=2.0.0 ./pact-flow.sh
+./pact-flow.sh
 ```
 
 Provider verification fails at step 4, the failure is published to the broker, and the script stops.
@@ -126,7 +130,7 @@ If you then ask the gate directly, it answers **"Computer says no"**:
 
 ```bash
 docker compose run --rm pact-cli broker can-i-deploy \
-  --pacticipant InventoryService --version 2.0.0 --to-environment production
+  --pacticipant InventoryService --version <the version printed at the start of the run> --to-environment production
 ```
 
 The breaking change is caught before it reaches production.
