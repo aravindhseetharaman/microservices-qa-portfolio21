@@ -45,6 +45,7 @@ class InventoryServicePactIT {
 
     @BeforeEach
     void setTarget(PactVerificationContext context) {
+
         context.setTarget(new HttpTestTarget("localhost", port));
     }
 
@@ -63,4 +64,22 @@ class InventoryServicePactIT {
     void item99DoesNotExist() {
         repository.deleteById(99);
     }
+
+    @State("item 1 exists and is in stock")
+    void item1ExistsAndIsInStock() {
+        repository.save(new Item(                                                                                                                                                                                                                                                                                                                                                                                                                                              1, "Keyboard", 25));
+
+    }
+    @State("item 2 exists but is out of stock")
+    void item2ExistsButIsOutOfStock() {
+            repository.save(new Item(2, "Mouse", 0));
+    }
+
+    @State("item 3 exists but is out of stock")
+    void item3ExistsButIsOutOfStock() {
+        repository.save(new Item(3, "Monitor", 0));
+    }
+
+
 }
+
